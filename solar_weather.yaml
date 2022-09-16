@@ -1,0 +1,290 @@
+substitutions:
+  name: sunny
+  friendly_name: "Weather Station"
+
+esphome:
+  name: "${name}"
+
+esp32:
+  board: esp32doit-devkit-v1
+  framework:
+    type: arduino
+
+logger:
+
+mdns:
+  disabled: false
+
+mqtt:
+  broker: !secret mqtt_broker
+  username: !secret mqtt_username
+  password: !secret mqtt_password
+
+ota:
+  password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "${friendly_name} Fallback Hotspot"
+    password: !secret ap_password
+
+captive_portal:
+
+deep_sleep:
+  run_duration: 40s
+  sleep_duration: 4min
+  wakeup_pin:
+  number: GPIO25
+  inverted: true
+
+dallas:
+  - pin: GPIO4
+    update_interval: 8s
+    id: dallas_ext
+
+external_components:
+  - source: github://squidpickles/esphome_components
+    components: [ si1145 ]
+
+i2c:
+  sda: GPIO21
+  scl: GPIO22
+  scan: false
+
+sensor:
+  - platform: wifi_signal
+    name: "wifi_signal"
+
+  - platform: dallas
+    index: 0
+    dallas_id: dallas_ext
+    name: "ds18b20"
+    accuracy_decimals: 4
+
+  - platform: adc
+    pin: GPIO33
+    name: "input_voltage"
+    icon: mdi:car-battery
+    attenuation: 11db
+    accuracy_decimals: 2
+    update_interval: 15s
+
+  - platform: si1145
+    update_interval: 8s
+    calculated_lux:
+      name: "lux"
+    visible:
+      name: "vis"
+      mode: auto
+    infrared:
+      name: "ir"
+      mode: auto
+    uv_index:
+      name: "uv_index"
+    address: 0x60
+
+  - platform: pulse_meter
+    pin: GPIO14
+    id: wind_speed
+    unit_of_measurement: 'knots'
+    name: "wind speed"
+    icon: 'mdi:weather-windy'
+    internal_filter: 13us # debounce
+    filters:
+      - multiply: 0.02160855
+
+  - platform: pulse_counter
+    pin: GPIO25
+    unit_of_measurement: 'in/hr'
+    name: "rain gauge"
+    icon: 'mdi:weather-rainy'
+    id: rain_gauge
+    count_mode:
+      rising_edge: DISABLE
+      falling_edge: INCREMENT
+    internal_filter: 13us # debounce
+    update_interval: 8s
+    filters:
+      - multiply: 0.660
+    accuracy_decimals: 4
+    total:
+      name: "rain gauge total"
+      unit_of_measurement: 'in'
+      filters:
+        - multiply: 0.011
+
+  - platform: bme280
+    address: 0x76
+    update_interval: 8s
+    iir_filter: 16x
+    temperature:
+      name: "bme280_temperature"
+      id: bme280_temperature
+      oversampling: 16x
+    humidity:
+      name: "bme280_humidity"
+      id: bme280_humidity
+      oversampling: 16x
+    pressure:
+      name: "bme280_pressure"
+      id: bme280_pressure
+      oversampling: 16x
+
+  - platform: adc
+    id: wind_dir_adc
+    pin: GPIO35
+    name: Wind Dir ADC
+    attenuation: 11db
+    update_interval: 8s
+    accuracy_decimals: 2
+
+  - platform: resistance
+    sensor: wind_dir_adc
+    id: wind_dir_resistance
+    configuration: DOWNSTREAM
+    resistor: 10kOhm
+    name: Wind Dir Resistance
+    reference_voltage: 3.16V
+    accuracy_decimals: 2
+    filters:
+      - median:
+          window_size: 7
+          send_every: 4
+          send_first_at: 3
+    on_value:
+      - if:
+          condition:
+            sensor.in_range:
+              id: wind_dir_resistance
+              above: 3200
+              below: 11000
+          then:
+            - text_sensor.template.publish:
+                id: wind_dir_card
+                state: "S"
+            - sensor.template.publish:
+                id: wind_heading
+                state: 180.0
+      - if:
+          condition:
+            sensor.in_range:
+              id: wind_dir_resistance
+              above: 11000
+              below: 151500
+          then:
+            - text_sensor.template.publish:
+                id: wind_dir_card
+                state: "SW"
+            - sensor.template.publish:
+                id: wind_heading
+                state: 225.0
+      - if:
+          condition:
+            sensor.in_range:
+              id: wind_dir_resistance
+              above: 151500
+              below: 300000
+          then:
+            - text_sensor.template.publish:
+                id: wind_dir_card
+                state: "W"
+            - sensor.template.publish:
+                id: wind_heading
+                state: 270.0
+      - if:
+          condition:
+            sensor.in_range:
+              id: wind_dir_resistance
+              above: 69500
+              below: 151500
+          then:
+            - text_sensor.template.publish:
+                id: wind_dir_card
+                state: "NW"
+            - sensor.template.publish:
+                id: wind_heading
+                state: 315.0
+      - if:
+          condition:
+            sensor.in_range:
+              id: wind_dir_resistance
+              above: 25000
+              below: 69500
+          then:
+            - text_sensor.template.publish:
+                id: wind_dir_card
+                state: "N"
+            - sensor.template.publish:
+                id: wind_heading
+                state: 0.0
+      - if:
+          condition:
+            sensor.in_range:
+              id: wind_dir_resistance
+              above: 4900
+              below: 25000
+          then:
+            - text_sensor.template.publish:
+                id: wind_dir_card
+                state: "NE"
+            - sensor.template.publish:
+                id: wind_heading
+                state: 45.0
+      - if:
+          condition:
+            sensor.in_range:
+              id: wind_dir_resistance
+              above: 0
+              below: 1650
+          then:
+            - text_sensor.template.publish:
+                id: wind_dir_card
+                state: "E"
+            - sensor.template.publish:
+                id: wind_heading
+                state: 90.0
+      - if:
+          condition:
+            sensor.in_range:
+              id: wind_dir_resistance
+              above: 1650
+              below: 3200
+          then:
+            - text_sensor.template.publish:
+                id: wind_dir_card
+                state: "SE"
+            - sensor.template.publish:
+                id: wind_heading
+                state: 135.0
+
+  - platform: template
+    name: "wind_heading"
+    id: wind_heading
+    unit_of_measurement: "°"
+
+text_sensor:
+  - platform: template
+    name: "wind_dir_card"
+    id: wind_dir_card
+
+  - platform: version
+    name: "ESPHome Version"
+    hide_timestamp: true
+
+time:
+  - platform: sntp
+    timezone: "America/Los_Angeles"
+    # on_time:
+      #- seconds: 0
+        #minutes: 0
+        #then:
+          #- sensor.integration.reset: rain_per_hour
+      #- seconds: 0
+        #minutes: 0
+        #hours: 0
+        #then:
+          #- sensor.integration.reset: rain_per_day
