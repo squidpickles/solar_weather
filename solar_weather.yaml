@@ -38,8 +38,8 @@ deep_sleep:
   run_duration: 40s
   sleep_duration: 4min
   wakeup_pin:
-  number: GPIO25
-  inverted: true
+    number: GPIO25
+    inverted: true
 
 dallas:
   - pin: GPIO4
